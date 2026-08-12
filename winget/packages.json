@@ -10,9 +10,11 @@
         "Type": "Microsoft.PreIndexed.Package"
       },
       "Packages": [
-        {
-          "PackageIdentifier": "JanDeDobbeleer.OhMyPosh"
-        }
+        { "PackageIdentifier": "Microsoft.PowerShell" },
+        { "PackageIdentifier": "JanDeDobbeleer.OhMyPosh" },
+        { "PackageIdentifier": "Git.Git" },
+        { "PackageIdentifier": "GitHub.cli" },
+        { "PackageIdentifier": "Microsoft.VisualStudioCode" }
       ]
     }
   ]
