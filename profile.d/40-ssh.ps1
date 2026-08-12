@@ -172,9 +172,12 @@ public static class SshcNativeConsole {
         $k = [Console]::ReadKey($true)
         $ctrl = [ConsoleModifiers]::Control
 
-        if (($k.Modifiers -band $ctrl) -and $k.Key -eq [ConsoleKey]::C) { return @{ Type = 'cancel' } }
-        if (($k.Modifiers -band $ctrl) -and $k.Key -eq [ConsoleKey]::E) { return @{ Type = 'edit' } }
-        if (($k.Modifiers -band $ctrl) -and $k.Key -eq [ConsoleKey]::U) { return @{ Type = 'clear' } }
+        # VT_INPUT often strips ConsoleModifiers and delivers C0 bytes (Ctrl+C/E/U = 3/5/21).
+        $ctrlChar = [int][char]$k.KeyChar
+        $withCtrl = [bool]($k.Modifiers -band $ctrl)
+        if (($withCtrl -and $k.Key -eq [ConsoleKey]::C) -or $ctrlChar -eq 3) { return @{ Type = 'cancel' } }
+        if (($withCtrl -and $k.Key -eq [ConsoleKey]::E) -or $ctrlChar -eq 5) { return @{ Type = 'edit' } }
+        if (($withCtrl -and $k.Key -eq [ConsoleKey]::U) -or $ctrlChar -eq 21) { return @{ Type = 'clear' } }
 
         # VT_INPUT / Windows Terminal often delivers Backspace as DEL (0x7F) or BS (0x08)
         # instead of ConsoleKey.Backspace; both are control chars and were previously ignored.
