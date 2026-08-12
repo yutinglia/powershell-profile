@@ -1,0 +1,12 @@
+# Local secrets — copy from profile.d/01-secrets.example.ps1
+profile.d/01-secrets.ps1
+
+# Third-party modules installed on this machine
+Modules/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
