@@ -32,6 +32,10 @@ function wezconf {
     code C:\Users\yutinglia\.config\wezterm
 }
 
+function ompconf {
+    code (Join-Path (Split-Path -Parent $profile) 'themes\my-theme.omp.json')
+}
+
 function reload {
     . $profile
 }
