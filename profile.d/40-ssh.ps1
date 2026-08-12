@@ -193,29 +193,72 @@ public static class SshcNativeConsole {
         if ($isEsc) {
             $seq = [System.Text.StringBuilder]::new()
             [void]$seq.Append([char]27)
-            $waitMs = 25
+            $mouseRe = [char]27 + '\[<(\d+);(\d+);(\d+)([Mm])'
             $sw = [System.Diagnostics.Stopwatch]::StartNew()
+            while ($sw.ElapsedMilliseconds -lt 25 -and -not [Console]::KeyAvailable) { }
+            if (-not [Console]::KeyAvailable) {
+                return @{ Type = 'cancel' }
+            }
+
+            $next = [Console]::ReadKey($true)
+            [void]$seq.Append($next.KeyChar)
+
+            if ($next.KeyChar -eq '[') {
+                $sw.Restart()
+                while ($sw.ElapsedMilliseconds -lt 8 -and -not [Console]::KeyAvailable) { }
+                if ([Console]::KeyAvailable) {
+                    $next = [Console]::ReadKey($true)
+                    [void]$seq.Append($next.KeyChar)
+                    if ($next.KeyChar -eq '<') {
+                        $limit = 512
+                        $n = 0
+                        $sw.Restart()
+                        while ($n -lt $limit) {
+                            if ($seq.ToString() -match $mouseRe) {
+                                while ([Console]::KeyAvailable -and $n -lt $limit) {
+                                    $ch = [Console]::ReadKey($true)
+                                    [void]$seq.Append($ch.KeyChar)
+                                    $n++
+                                }
+                                break
+                            }
+                            if ([Console]::KeyAvailable) {
+                                $ch = [Console]::ReadKey($true)
+                                [void]$seq.Append($ch.KeyChar)
+                                $n++
+                                $sw.Restart()
+                                continue
+                            }
+                            if ($sw.ElapsedMilliseconds -ge 20) { break }
+                        }
+
+                        $mouseMatches = [regex]::Matches($seq.ToString(), $mouseRe)
+                        if ($mouseMatches.Count -gt 0) {
+                            $mouse = $mouseMatches[$mouseMatches.Count - 1]
+                            return @{
+                                Type   = 'mouse'
+                                Button = [int]$mouse.Groups[1].Value
+                                X      = [int]$mouse.Groups[2].Value
+                                Y      = [int]$mouse.Groups[3].Value
+                                Down   = $mouse.Groups[4].Value -eq 'M'
+                            }
+                        }
+                        return @{ Type = 'none' }
+                    }
+                }
+            }
+
+            $waitMs = 8
+            $sw.Restart()
             while ($sw.ElapsedMilliseconds -lt $waitMs) {
                 if ([Console]::KeyAvailable) {
                     $next = [Console]::ReadKey($true)
                     [void]$seq.Append($next.KeyChar)
                     $sw.Restart()
-                    $waitMs = 8
                 }
             }
             $s = $seq.ToString()
             if ($s.Length -eq 1) { return @{ Type = 'cancel' } }
-
-            $mouse = [regex]::Match($s, [char]27 + '\[<(\d+);(\d+);(\d+)([Mm])')
-            if ($mouse.Success) {
-                return @{
-                    Type   = 'mouse'
-                    Button = [int]$mouse.Groups[1].Value
-                    X      = [int]$mouse.Groups[2].Value
-                    Y      = [int]$mouse.Groups[3].Value
-                    Down   = $mouse.Groups[4].Value -eq 'M'
-                }
-            }
             if ($s.Contains([char]27 + '[A')) { return @{ Type = 'up' } }
             if ($s.Contains([char]27 + '[B')) { return @{ Type = 'down' } }
             if ($s.Contains([char]27 + '[5~')) { return @{ Type = 'pageup' } }
@@ -263,6 +306,9 @@ public static class SshcNativeConsole {
         $scroll = 0
         $lastClickIndex = -1
         $lastClickAt = [datetime]::MinValue
+        $dirty = $true
+        $lastW = -1
+        $lastH = -1
 
         Initialize-SshcNativeConsole
         $inputHandle = [SshcNativeConsole]::GetStdHandle(-10)
@@ -286,7 +332,7 @@ public static class SshcNativeConsole {
             [Console]::TreatControlCAsInput = $true
             [Console]::CursorVisible = $false
             [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-            [Console]::Write("$esc[?1049h$esc[?25l$esc[?7l$esc[?1000h$esc[?1006h$esc[?1002h")
+            [Console]::Write("$esc[?1049h$esc[?25l$esc[?7l$esc[?1000h$esc[?1006h$esc[?1003h")
 
             while ($true) {
                 $view = @($Entries)
@@ -311,6 +357,11 @@ public static class SshcNativeConsole {
                 $h = [Console]::WindowHeight
                 if ($w -lt 40) { $w = 40 }
                 if ($h -lt 12) { $h = 12 }
+                if ($w -ne $lastW -or $h -ne $lastH) {
+                    $dirty = $true
+                    $lastW = $w
+                    $lastH = $h
+                }
 
                 $showDetails = $w -ge 72
                 $detailW = if ($showDetails) { [Math]::Max(28, [int][Math]::Floor($w * 0.40)) } else { 0 }
@@ -326,6 +377,15 @@ public static class SshcNativeConsole {
                     if ($scroll -lt 0) { $scroll = 0 }
                 }
 
+                $layout = @{
+                    ListTop    = $listTop
+                    ListBottom = $listBottom
+                    ListLeft   = 2
+                    ListRight  = $listW - 1
+                    ListHeight = $listHeight
+                }
+
+                if ($dirty) {
                 $nameWidth = 12
                 if ($view.Count -gt 0) {
                     $nameWidth = [Math]::Max(12, ($view | ForEach-Object { $_.Name.Length } | Measure-Object -Maximum).Maximum)
@@ -449,15 +509,19 @@ public static class SshcNativeConsole {
                     $lines[$lines.Count - 1] = "$sgrBorder$bl$sgrDim$hint$sgrBorder$br$reset"
                 }
 
-                $frame = "$esc[H$esc[J" + ($lines -join "`n")
-                [Console]::Write($frame)
-
-                $layout = @{
-                    ListTop    = $listTop
-                    ListBottom = $listBottom
-                    ListLeft   = 2
-                    ListRight  = $listW - 1
-                    ListHeight = $listHeight
+                $sb = [System.Text.StringBuilder]::new()
+                [void]$sb.Append("$esc[?2026h")
+                for ($i = 0; $i -lt $lines.Count; $i++) {
+                    [void]$sb.Append("$esc[$($i + 1);1H")
+                    [void]$sb.Append($lines[$i])
+                    [void]$sb.Append("$sgrBg$esc[K")
+                }
+                if ($lines.Count -lt $h) {
+                    [void]$sb.Append("$esc[$($lines.Count + 1);1H$sgrBg$esc[J")
+                }
+                [void]$sb.Append("$esc[?2026l")
+                [Console]::Write($sb.ToString())
+                $dirty = $false
                 }
 
                 $input = Read-SshcTuiInput
@@ -466,56 +530,69 @@ public static class SshcNativeConsole {
                     'enter' {
                         if ($view.Count -gt 0) { return $view[$selected] }
                     }
-                    'up' { $selected-- }
-                    'down' { $selected++ }
-                    'pageup' { $selected -= $layout.ListHeight }
-                    'pagedown' { $selected += $layout.ListHeight }
-                    'home' { $selected = 0 }
-                    'end' { $selected = [Math]::Max(0, $view.Count - 1) }
+                    'up' { $selected--; $dirty = $true }
+                    'down' { $selected++; $dirty = $true }
+                    'pageup' { $selected -= $layout.ListHeight; $dirty = $true }
+                    'pagedown' { $selected += $layout.ListHeight; $dirty = $true }
+                    'home' { $selected = 0; $dirty = $true }
+                    'end' { $selected = [Math]::Max(0, $view.Count - 1); $dirty = $true }
                     'backspace' {
                         if ($queryText.Length -gt 0) {
                             $queryText = $queryText.Substring(0, $queryText.Length - 1)
                             $selected = 0
                             $scroll = 0
+                            $dirty = $true
                         }
                     }
                     'clear' {
                         $queryText = ''
                         $selected = 0
                         $scroll = 0
+                        $dirty = $true
                     }
                     'char' {
                         $queryText += $input.Char
                         $selected = 0
                         $scroll = 0
+                        $dirty = $true
                     }
                     'edit' {
                         if ($ConfigPath) { code $ConfigPath }
+                        $dirty = $true
                     }
                     'mouse' {
-                        if (-not $input.Down) { break }
-                        if ($input.Button -eq 64) { $selected--; break }
-                        if ($input.Button -eq 65) { $selected++; break }
-                        if ($input.Button -ne 0) { break }
-                        if ($input.Y -ge $layout.ListTop -and $input.Y -le $layout.ListBottom -and
-                            $input.X -ge $layout.ListLeft -and $input.X -le $layout.ListRight) {
-                            $idx = $scroll + ($input.Y - $layout.ListTop)
-                            if ($idx -ge 0 -and $idx -lt $view.Count) {
-                                $now = [datetime]::UtcNow
-                                if ($idx -eq $lastClickIndex -and ($now - $lastClickAt).TotalMilliseconds -lt 450) {
-                                    return $view[$idx]
-                                }
+                        $inList = $input.Y -ge $layout.ListTop -and $input.Y -le $layout.ListBottom -and
+                            $input.X -ge $layout.ListLeft -and $input.X -le $layout.ListRight
+                        $idx = $scroll + ($input.Y - $layout.ListTop)
+                        $validIdx = $inList -and $idx -ge 0 -and $idx -lt $view.Count
+
+                        if ($input.Button -eq 35 -or $input.Button -eq 32) {
+                            if ($validIdx -and $idx -ne $selected) {
                                 $selected = $idx
-                                $lastClickIndex = $idx
-                                $lastClickAt = $now
+                                $dirty = $true
                             }
+                            break
+                        }
+                        if (-not $input.Down) { break }
+                        if ($input.Button -eq 64) { $selected--; $dirty = $true; break }
+                        if ($input.Button -eq 65) { $selected++; $dirty = $true; break }
+                        if ($input.Button -ne 0) { break }
+                        if ($validIdx) {
+                            $now = [datetime]::UtcNow
+                            if ($idx -eq $lastClickIndex -and ($now - $lastClickAt).TotalMilliseconds -lt 450) {
+                                return $view[$idx]
+                            }
+                            $selected = $idx
+                            $lastClickIndex = $idx
+                            $lastClickAt = $now
+                            $dirty = $true
                         }
                     }
                 }
             }
         }
         finally {
-            [Console]::Write("$esc[?1002l$esc[?1006l$esc[?1000l$esc[?7h$esc[?25h$esc[?1049l")
+            [Console]::Write("$esc[?2026l$esc[?1003l$esc[?1006l$esc[?1000l$esc[?7h$esc[?25h$esc[?1049l")
             [Console]::CursorVisible = $savedCursor
             [Console]::TreatControlCAsInput = $savedTreatCtrlC
             [Console]::OutputEncoding = $savedOutputEncoding
