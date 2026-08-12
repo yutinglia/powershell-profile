@@ -176,6 +176,17 @@ public static class SshcNativeConsole {
         if (($k.Modifiers -band $ctrl) -and $k.Key -eq [ConsoleKey]::E) { return @{ Type = 'edit' } }
         if (($k.Modifiers -band $ctrl) -and $k.Key -eq [ConsoleKey]::U) { return @{ Type = 'clear' } }
 
+        # VT_INPUT / Windows Terminal often delivers Backspace as DEL (0x7F) or BS (0x08)
+        # instead of ConsoleKey.Backspace; both are control chars and were previously ignored.
+        if (
+            $k.Key -eq [ConsoleKey]::Backspace -or
+            $k.Key -eq [ConsoleKey]::Delete -or
+            $k.KeyChar -eq [char]8 -or
+            $k.KeyChar -eq [char]127
+        ) {
+            return @{ Type = 'backspace' }
+        }
+
         switch ($k.Key) {
             ([ConsoleKey]::Enter) { return @{ Type = 'enter' } }
             ([ConsoleKey]::UpArrow) { return @{ Type = 'up' } }
@@ -184,8 +195,6 @@ public static class SshcNativeConsole {
             ([ConsoleKey]::PageDown) { return @{ Type = 'pagedown' } }
             ([ConsoleKey]::Home) { return @{ Type = 'home' } }
             ([ConsoleKey]::End) { return @{ Type = 'end' } }
-            ([ConsoleKey]::Backspace) { return @{ Type = 'backspace' } }
-            ([ConsoleKey]::Delete) { return @{ Type = 'backspace' } }
             ([ConsoleKey]::Tab) { return @{ Type = 'down' } }
         }
 
@@ -261,6 +270,7 @@ public static class SshcNativeConsole {
             if ($s.Length -eq 1) { return @{ Type = 'cancel' } }
             if ($s.Contains([char]27 + '[A')) { return @{ Type = 'up' } }
             if ($s.Contains([char]27 + '[B')) { return @{ Type = 'down' } }
+            if ($s.Contains([char]27 + '[3~')) { return @{ Type = 'backspace' } }
             if ($s.Contains([char]27 + '[5~')) { return @{ Type = 'pageup' } }
             if ($s.Contains([char]27 + '[6~')) { return @{ Type = 'pagedown' } }
             return @{ Type = 'none' }
