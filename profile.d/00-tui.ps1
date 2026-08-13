@@ -159,13 +159,33 @@ public static class ProfileTuiNativeConsole {
 
                         $mouseMatches = [regex]::Matches($seq.ToString(), $mouseRe)
                         if ($mouseMatches.Count -gt 0) {
-                            $mouse = $mouseMatches[$mouseMatches.Count - 1]
+                            $wheelDelta = 0
+                            $lastWheel = $null
+                            $lastEvent = $null
+                            foreach ($mouse in $mouseMatches) {
+                                $lastEvent = $mouse
+                                $btn = [int]$mouse.Groups[1].Value
+                                if (($btn -band 64) -eq 64) {
+                                    $lastWheel = $mouse
+                                    if (($btn -band 1) -eq 0) { $wheelDelta-- } else { $wheelDelta++ }
+                                }
+                            }
+                            if ($wheelDelta -ne 0 -and $null -ne $lastWheel) {
+                                return @{
+                                    Type   = 'mouse'
+                                    Button = if ($wheelDelta -lt 0) { 64 } else { 65 }
+                                    Repeat = [Math]::Abs($wheelDelta)
+                                    X      = [int]$lastWheel.Groups[2].Value
+                                    Y      = [int]$lastWheel.Groups[3].Value
+                                    Down   = $true
+                                }
+                            }
                             return @{
                                 Type   = 'mouse'
-                                Button = [int]$mouse.Groups[1].Value
-                                X      = [int]$mouse.Groups[2].Value
-                                Y      = [int]$mouse.Groups[3].Value
-                                Down   = $mouse.Groups[4].Value -eq 'M'
+                                Button = [int]$lastEvent.Groups[1].Value
+                                X      = [int]$lastEvent.Groups[2].Value
+                                Y      = [int]$lastEvent.Groups[3].Value
+                                Down   = $lastEvent.Groups[4].Value -eq 'M'
                             }
                         }
                         return @{ Type = 'none' }
@@ -252,6 +272,7 @@ public static class ProfileTuiNativeConsole {
         $scroll = 0
         $lastClickIndex = -1
         $lastClickAt = [datetime]::MinValue
+        $lastWheelAt = [datetime]::MinValue
         $dirty = $true
         $lastW = -1
         $lastH = -1
@@ -319,6 +340,8 @@ public static class ProfileTuiNativeConsole {
                     if ($selected -lt $scroll) { $scroll = $selected }
                     if ($selected -ge ($scroll + $listHeight)) { $scroll = $selected - $listHeight + 1 }
                     if ($scroll -lt 0) { $scroll = 0 }
+                    $maxScroll = [Math]::Max(0, $view.Count - $listHeight)
+                    if ($scroll -gt $maxScroll) { $scroll = $maxScroll }
                 }
 
                 $layout = @{
@@ -499,7 +522,26 @@ public static class ProfileTuiNativeConsole {
                         $idx = $scroll + ($tuiInput.Y - $layout.ListTop)
                         $validIdx = $inList -and $idx -ge 0 -and $idx -lt $view.Count
 
+                        if (($tuiInput.Button -band 64) -eq 64) {
+                            $repeat = if ($tuiInput.Repeat) { [int]$tuiInput.Repeat } else { 1 }
+                            $delta = 3 * $repeat
+                            if (($tuiInput.Button -band 1) -eq 0) { $scroll -= $delta } else { $scroll += $delta }
+                            $maxScroll = [Math]::Max(0, $view.Count - $layout.ListHeight)
+                            if ($scroll -lt 0) { $scroll = 0 }
+                            if ($scroll -gt $maxScroll) { $scroll = $maxScroll }
+                            if ($view.Count -gt 0) {
+                                if ($selected -lt $scroll) { $selected = $scroll }
+                                $lastVisible = $scroll + $layout.ListHeight - 1
+                                if ($selected -gt $lastVisible) {
+                                    $selected = [Math]::Min($view.Count - 1, $lastVisible)
+                                }
+                            }
+                            $lastWheelAt = [datetime]::UtcNow
+                            $dirty = $true
+                            break
+                        }
                         if ($tuiInput.Button -eq 35 -or $tuiInput.Button -eq 32) {
+                            if (([datetime]::UtcNow - $lastWheelAt).TotalMilliseconds -lt 80) { break }
                             if ($validIdx -and $idx -ne $selected) {
                                 $selected = $idx
                                 $dirty = $true
@@ -507,8 +549,6 @@ public static class ProfileTuiNativeConsole {
                             break
                         }
                         if (-not $tuiInput.Down) { break }
-                        if ($tuiInput.Button -eq 64) { $selected--; $dirty = $true; break }
-                        if ($tuiInput.Button -eq 65) { $selected++; $dirty = $true; break }
                         if ($tuiInput.Button -ne 0) { break }
                         if ($validIdx) {
                             $now = [datetime]::UtcNow
