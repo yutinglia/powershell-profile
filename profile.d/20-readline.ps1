@@ -91,6 +91,107 @@ public sealed class ProfileCommandPredictor : ICommandPredictor
 '@
     }
 
+    if (-not ('ProfileHistoryPredictor' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Management.Automation;
+using System.Management.Automation.Subsystem;
+using System.Management.Automation.Subsystem.Prediction;
+using System.Threading;
+
+public sealed class ProfileHistoryPredictor : ICommandPredictor
+{
+    public static readonly Guid PredictorId = new Guid("8b2e9f14-6c47-4a1d-b3e8-5d70c91a4f26");
+    private readonly HashSet<string> _profileNames;
+    private readonly object _gate = new object();
+    private string[] _history;
+
+    public ProfileHistoryPredictor(string[] profileNames, string[] history)
+    {
+        _profileNames = new HashSet<string>(
+            profileNames ?? Array.Empty<string>(),
+            StringComparer.OrdinalIgnoreCase);
+        _history = history ?? Array.Empty<string>();
+    }
+
+    public Guid Id { get { return PredictorId; } }
+    public string Name { get { return "History"; } }
+    public string Description { get { return "Suggests PSReadLine history except bare profile commands"; } }
+    public Dictionary<string, ScriptBlock> FunctionsToDefine { get { return null; } }
+
+    public SuggestionPackage GetSuggestion(PredictionClient client, PredictionContext context, CancellationToken cancellationToken)
+    {
+        string input = context.InputAst.Extent.Text;
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return default(SuggestionPackage);
+        }
+
+        string[] hist;
+        lock (_gate)
+        {
+            hist = _history;
+        }
+
+        var results = new List<PredictiveSuggestion>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (int i = hist.Length - 1; i >= 0; i--)
+        {
+            string line = hist[i];
+            if (string.IsNullOrEmpty(line) || line.Length < input.Length)
+            {
+                continue;
+            }
+            if (_profileNames.Contains(line))
+            {
+                continue;
+            }
+            if (line.IndexOf(input, StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                continue;
+            }
+            if (!seen.Add(line))
+            {
+                continue;
+            }
+
+            results.Add(new PredictiveSuggestion(line));
+            if (results.Count >= 20)
+            {
+                break;
+            }
+        }
+
+        return results.Count == 0 ? default(SuggestionPackage) : new SuggestionPackage(results);
+    }
+
+    public bool CanAcceptFeedback(PredictionClient client, PredictorFeedbackKind feedback)
+    {
+        return feedback == PredictorFeedbackKind.CommandLineAccepted;
+    }
+
+    public void OnSuggestionDisplayed(PredictionClient client, uint session, int countOrIndex) { }
+    public void OnSuggestionAccepted(PredictionClient client, uint session, string acceptedSuggestion) { }
+
+    public void OnCommandLineAccepted(PredictionClient client, IReadOnlyList<string> history)
+    {
+        var arr = new string[history.Count];
+        for (int i = 0; i < history.Count; i++)
+        {
+            arr[i] = history[i];
+        }
+        lock (_gate)
+        {
+            _history = arr;
+        }
+    }
+
+    public void OnCommandLineExecuted(PredictionClient client, string commandLine, bool success) { }
+}
+'@
+    }
+
     $profilePredictNames = [System.Collections.Generic.List[string]]::new()
     $profilePredictTips = [System.Collections.Generic.List[string]]::new()
     $profilePredictFiles = @()
@@ -153,27 +254,42 @@ public sealed class ProfileCommandPredictor : ICommandPredictor
         }
     }
 
+    $profilePredictHistory = [System.Collections.Generic.List[string]]::new()
     try {
-        [System.Management.Automation.Subsystem.SubsystemManager]::UnregisterSubsystem(
-            [System.Management.Automation.Subsystem.SubsystemKind]::CommandPredictor,
-            [ProfileCommandPredictor]::PredictorId
-        )
+        foreach ($item in [Microsoft.PowerShell.PSConsoleReadLine]::GetHistoryItems()) {
+            if ($item.CommandLine) {
+                $profilePredictHistory.Add($item.CommandLine)
+            }
+        }
     }
     catch {
     }
 
+    $subsystemKind = [System.Management.Automation.Subsystem.SubsystemKind]::CommandPredictor
+    foreach ($predictorId in @([ProfileCommandPredictor]::PredictorId, [ProfileHistoryPredictor]::PredictorId)) {
+        try {
+            [System.Management.Automation.Subsystem.SubsystemManager]::UnregisterSubsystem($subsystemKind, $predictorId)
+        }
+        catch {
+        }
+    }
+
     [System.Management.Automation.Subsystem.SubsystemManager]::RegisterSubsystem(
-        [System.Management.Automation.Subsystem.SubsystemKind]::CommandPredictor,
+        $subsystemKind,
         [ProfileCommandPredictor]::new([string[]]$profilePredictNames, [string[]]$profilePredictTips)
+    )
+    [System.Management.Automation.Subsystem.SubsystemManager]::RegisterSubsystem(
+        $subsystemKind,
+        [ProfileHistoryPredictor]::new([string[]]$profilePredictNames, [string[]]$profilePredictHistory)
     )
 }
 catch {
 }
 
-Remove-Variable -Name profilePredictNames, profilePredictTips, profilePredictFiles, profilePredictFile, profilePredictLines, profilePredictName, profilePredictTip -ErrorAction SilentlyContinue
+Remove-Variable -Name profilePredictNames, profilePredictTips, profilePredictFiles, profilePredictFile, profilePredictLines, profilePredictName, profilePredictTip, profilePredictHistory, subsystemKind, predictorId, item -ErrorAction SilentlyContinue
 
 try {
-    Set-PSReadLineOption -PredictionSource HistoryAndPlugin -PredictionViewStyle ListView -ErrorAction Stop
+    Set-PSReadLineOption -PredictionSource Plugin -PredictionViewStyle ListView -ErrorAction Stop
 }
 catch {
 }
