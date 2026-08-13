@@ -32,6 +32,8 @@ Thin loader: `Microsoft.PowerShell_profile.ps1` dots `profile.d/*.ps1` in filena
 | `30-aliases.ps1` | `open`, `work`, `conf`, `..` / `...`, `nx`, `pm`, `wezconf`, `ompconf`, `reload`, `touch`, `wslconf` |
 | `40-ssh.ps1` | `sshconf`, `sshls`, `sshc` (uses `Invoke-ProfilePicker`) |
 | `45-proj.ps1` | `proj` TUI — git repos under `WORK_ROOT` |
+| `46-conda.ps1` | `condac` TUI — conda env activate / deactivate |
+| `47-nvm.ps1` | `nvmc` TUI — nvm-windows version switch |
 | `50-tools.ps1` | `cleanport` (restart WinNAT), `claude_remote` |
 | `60-gh-copilot.ps1` | `ghcs`, `ghce` |
 | `70-completions.ps1` | Chocolatey only |
@@ -88,7 +90,8 @@ Checkboxes are the source of truth. **Implement** lines are the agent prompt.
 - [x] **`proj`** · `proj` · M — Add a `proj` TUI that lists git repos under `D:/work`, reusing the sshc picker style, and cds into the selected repo.
 - [ ] **`histc`** · `histc` · M — Add a `histc` TUI over PSReadLine/PowerShell history with filter, preview, and insert-or-run.
 - [ ] **`awsc`** · `awsc` · S — Add an `awsc` TUI that lists AWS profiles and sets `AWS_PROFILE` for the current session. (Prompt already has an AWS segment.)
-- [ ] **`envc`** · `envc` · M — Add an `envc` TUI to pick conda or local venv environments and activate the selected one. (AllHosts profile already inits conda.)
+- [x] **`condac`** · `condac` · M — Add a `condac` TUI that lists conda envs (`conda env list --json`) and activates the selected one via the AllHosts conda hook. Pin `(deactivate)` at the top when an env is active. *Replaces `envc`; no local venv.*
+- [x] **`nvmc`** · `nvmc` · M — Add an `nvmc` TUI that lists nvm-windows versions from `NVM_HOME` and runs `nvm use`. Do not call `nvm.exe` to list (it pops a Terminal Only dialog without a console). Pin `.nvmrc` matches at the top.
 
 ### sshc / SSH
 

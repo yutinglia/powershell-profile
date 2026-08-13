@@ -51,7 +51,8 @@ $wingetRequired = @(
 # Used by aliases (nx/pm/wezconf) or optional AllHosts tools; not required to load the profile.
 $wingetOptional = @(
     'wez.wezterm',
-    'Anaconda.Miniconda3'
+    'Anaconda.Miniconda3',
+    'CoreyButler.NVMforWindows'
 )
 
 Write-Host 'Installing winget packages...'
