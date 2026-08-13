@@ -34,7 +34,7 @@ Thin loader: `Microsoft.PowerShell_profile.ps1` dots `profile.d/*.ps1` in filena
 | `45-proj.ps1` | `proj` TUI — git repos under `WORK_ROOT` |
 | `46-conda.ps1` | `condac` TUI — conda env activate / deactivate |
 | `47-nvm.ps1` | `nvmc` TUI — nvm-windows version switch |
-| `50-tools.ps1` | `cleanport` (restart WinNAT), `claude_remote` |
+| `50-tools.ps1` | `cleanport` (restart WinNAT) |
 | `60-gh-copilot.ps1` | `ghcs`, `ghce` |
 | `70-completions.ps1` | Chocolatey only |
 | `90-help.ps1` | `help` lists function names + files; `pshelp` → `Get-Help` |

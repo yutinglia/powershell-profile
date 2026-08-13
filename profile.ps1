@@ -1,8 +1,9 @@
 
 #region conda initialize
 # !! Contents within this block are managed by 'conda init' !!
-If (Test-Path "C:\Users\yutinglia\miniconda3\Scripts\conda.exe") {
-    (& "C:\Users\yutinglia\miniconda3\Scripts\conda.exe" "shell.powershell" "hook") | Out-String | ?{$_} | Invoke-Expression
+$condaExe = Join-Path $env:USERPROFILE 'miniconda3\Scripts\conda.exe'
+If (Test-Path $condaExe) {
+    (& $condaExe "shell.powershell" "hook") | Out-String | ?{$_} | Invoke-Expression
 }
 #endregion
 

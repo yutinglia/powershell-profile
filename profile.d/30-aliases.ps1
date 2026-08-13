@@ -61,7 +61,7 @@ function wezconf {
     .SYNOPSIS
         Open the WezTerm config folder in VS Code.
     #>
-    code C:\Users\yutinglia\.config\wezterm
+    code $env:USERPROFILE\.config\wezterm
 }
 
 function ompconf {
