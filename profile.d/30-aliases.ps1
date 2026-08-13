@@ -1,7 +1,7 @@
 Set-Alias -Name open -Value ii
 
 function work {
-    Set-Location D:/work
+    Set-Location $env:WORK_ROOT
 }
 
 function conf {

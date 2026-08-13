@@ -14,7 +14,7 @@ Agent handoff for this PowerShell 7 profile. Not a generic plugin list — ideas
 1. Pick a single `id` below.
 2. Follow **Implement** (English prompt, copy-paste into a new agent).
 3. Match existing style: Dracula tokens (`#282a36` / `#bd93f9` / `#50fa7b`), Nerd Font icons, `profile.d/NN-*.ps1` numbered fragments, comment-based help if you add functions.
-4. Check the box when done. Do not extract a shared TUI kit until a second picker actually needs it.
+4. Check the box when done. Shared TUI picker is `Invoke-ProfilePicker` in `profile.d/00-tui.ps1`.
 
 ---
 
@@ -24,12 +24,14 @@ Thin loader: `Microsoft.PowerShell_profile.ps1` dots `profile.d/*.ps1` in filena
 
 | Fragment | Role |
 | --- | --- |
-| `00-env.ps1` | `VIRTUAL_ENV_DISABLE_PROMPT`, `SSH_AUTH_SOCK` |
+| `00-env.ps1` | `VIRTUAL_ENV_DISABLE_PROMPT`, `SSH_AUTH_SOCK`, `WORK_ROOT` |
+| `00-tui.ps1` | `Invoke-ProfilePicker` native TUI (mouse, hover, details, numbered fallback) |
 | `01-secrets.ps1` | OpenRouter / Anthropic keys (gitignored; example is tracked) |
 | `10-prompt.ps1` | Terminal-Icons, posh-git, Oh My Posh → `themes/my-theme.omp.json` |
 | `20-readline.ps1` | MenuComplete, history prediction, up/down history search |
 | `30-aliases.ps1` | `open`, `work`, `conf`, `..` / `...`, `nx`, `pm`, `wezconf`, `ompconf`, `reload`, `touch`, `wslconf` |
-| `40-ssh.ps1` | `sshconf`, `sshls`, `sshc` native TUI (mouse, hover, details, no fzf) |
+| `40-ssh.ps1` | `sshconf`, `sshls`, `sshc` (uses `Invoke-ProfilePicker`) |
+| `45-proj.ps1` | `proj` TUI — git repos under `WORK_ROOT` |
 | `50-tools.ps1` | `cleanport` (restart WinNAT), `claude_remote` |
 | `60-gh-copilot.ps1` | `ghcs`, `ghce` |
 | `70-completions.ps1` | Chocolatey only |
@@ -45,13 +47,11 @@ Theme is two-line Dracula; keep the full prompt bar in history; clock is on the 
 
 ## Do first
 
-TUI engine stays inside `40-ssh.ps1` until a second menu shares it.
+TUI engine lives in `profile.d/00-tui.ps1` (`Invoke-ProfilePicker`); `sshc` and `proj` both use it.
 
-### 1. `proj` — project picker · M · tui
+### 1. `proj` — project picker · M · tui · done
 
-`work` only cds to `D:/work`. Scan git repos under that tree, filter like `sshc`, preview remote/branch, Enter cds.
-
-- Implement: Add a `proj` TUI that lists git repos under `D:/work`, reusing the sshc picker style, and cds into the selected repo.
+`work` cds to `WORK_ROOT`; `proj` scans git repos under that tree.
 
 ### 2. `killport` — free a port · S · qol
 
@@ -84,8 +84,8 @@ Checkboxes are the source of truth. **Implement** lines are the agent prompt.
 
 ### TUI family
 
-- [ ] **`tui-kit`** · `profile.d/00-tui.ps1` · L — Extract a reusable TUI picker from `profile.d/40-ssh.ps1` (Dracula, hover, mouse, dirty redraw) into a shared fragment, then keep sshc using it. *Wait until a second picker exists.*
-- [ ] **`proj`** · `proj` · M — Add a `proj` TUI that lists git repos under `D:/work`, reusing the sshc picker style, and cds into the selected repo.
+- [x] **`tui-kit`** · `profile.d/00-tui.ps1` · L — Extract a reusable TUI picker from `profile.d/40-ssh.ps1` (Dracula, hover, mouse, dirty redraw) into a shared fragment, then keep sshc using it. *Wait until a second picker exists.*
+- [x] **`proj`** · `proj` · M — Add a `proj` TUI that lists git repos under `D:/work`, reusing the sshc picker style, and cds into the selected repo.
 - [ ] **`histc`** · `histc` · M — Add a `histc` TUI over PSReadLine/PowerShell history with filter, preview, and insert-or-run.
 - [ ] **`awsc`** · `awsc` · S — Add an `awsc` TUI that lists AWS profiles and sets `AWS_PROFILE` for the current session. (Prompt already has an AWS segment.)
 - [ ] **`envc`** · `envc` · M — Add an `envc` TUI to pick conda or local venv environments and activate the selected one. (AllHosts profile already inits conda.)
