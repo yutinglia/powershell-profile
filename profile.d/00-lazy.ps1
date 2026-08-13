@@ -117,26 +117,19 @@ function Invoke-ProfileLazyNativeCompleter {
 function Register-ProfileLazyNativeCompleter {
     <#
     .SYNOPSIS
-        Register a native completer that loads a lazy fragment on first Tab.
+        Record a native command whose first Tab loads a lazy fragment.
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [string]$Command,
+        [string[]]$Command,
 
         [Parameter(Mandatory)]
         [string]$File
     )
 
-    $script:ProfileLazyNatives[$Command] = $File
-    try {
-        Unregister-ArgumentCompleter -CommandName $Command -Native -ErrorAction Stop
-    }
-    catch {
-    }
-    Register-ArgumentCompleter -Native -CommandName $Command -ScriptBlock {
-        param($wordToComplete, $commandAst, $cursorPosition)
-        Invoke-ProfileLazyNativeCompleter $wordToComplete $commandAst $cursorPosition
+    foreach ($name in $Command) {
+        $script:ProfileLazyNatives[$name] = $File
     }
 }
 
@@ -144,3 +137,12 @@ Register-ProfileLazyFunction -Command ghcs, ghce -File '60-gh-copilot.lazy.ps1'
 Register-ProfileLazyFunction -Command Update-SessionEnvironment, refreshenv -File '70-completions.lazy.ps1'
 Register-ProfileLazyNativeCompleter -Command choco -File '70-completions.lazy.ps1'
 Register-ProfileLazyNativeCompleter -Command git -File '15-poshgit.lazy.ps1'
+
+# One native completer for all lazy commands. pwsh has no Unregister-ArgumentCompleter;
+# a per-command Register plus try/catch around the missing cmdlet threw on every startup.
+if ($script:ProfileLazyNatives.Count -gt 0) {
+    Register-ArgumentCompleter -Native -CommandName ([string[]]$script:ProfileLazyNatives.Keys) -ScriptBlock {
+        param($wordToComplete, $commandAst, $cursorPosition)
+        Invoke-ProfileLazyNativeCompleter $wordToComplete $commandAst $cursorPosition
+    }
+}

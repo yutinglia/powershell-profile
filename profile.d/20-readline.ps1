@@ -206,11 +206,16 @@ try {
     }
 
     $subsystemKind = [System.Management.Automation.Subsystem.SubsystemKind]::CommandPredictor
-    foreach ($predictorId in @([ProfileCommandPredictor]::PredictorId, [ProfileHistoryPredictor]::PredictorId)) {
-        try {
-            [System.Management.Automation.Subsystem.SubsystemManager]::UnregisterSubsystem($subsystemKind, $predictorId)
+    $predictorInfo = [System.Management.Automation.Subsystem.SubsystemManager]::GetSubsystemInfo($subsystemKind)
+    $predictorRegistered = [System.Collections.Generic.HashSet[guid]]::new()
+    if ($predictorInfo.IsRegistered) {
+        foreach ($impl in $predictorInfo.Implementations) {
+            [void]$predictorRegistered.Add($impl.Id)
         }
-        catch {
+    }
+    foreach ($predictorId in @([ProfileCommandPredictor]::PredictorId, [ProfileHistoryPredictor]::PredictorId)) {
+        if ($predictorRegistered.Contains($predictorId)) {
+            [System.Management.Automation.Subsystem.SubsystemManager]::UnregisterSubsystem($subsystemKind, $predictorId)
         }
     }
 
@@ -226,7 +231,7 @@ try {
 catch {
 }
 
-Remove-Variable -Name profilePredictNames, profilePredictTips, profilePredictFiles, profilePredictFile, profilePredictLines, profilePredictName, profilePredictTip, profilePredictHistory, profilePredictHistoryPath, profilePredictCacheDir, profilePredictNameCache, profilePredictStamp, profilePredictCached, profilePredictJson, subsystemKind, predictorId -ErrorAction SilentlyContinue
+Remove-Variable -Name profilePredictNames, profilePredictTips, profilePredictFiles, profilePredictFile, profilePredictLines, profilePredictName, profilePredictTip, profilePredictHistory, profilePredictHistoryPath, profilePredictCacheDir, profilePredictNameCache, profilePredictStamp, profilePredictCached, profilePredictJson, subsystemKind, predictorId, predictorInfo, predictorRegistered, impl -ErrorAction SilentlyContinue
 
 try {
     Set-PSReadLineOption -PredictionSource Plugin -PredictionViewStyle ListView -ErrorAction Stop

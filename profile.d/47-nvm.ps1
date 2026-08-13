@@ -100,6 +100,16 @@ function nvmc {
         [string]$Filter
     )
 
+    if (-not $script:NvmcCompleterRegistered) {
+        $script:NvmcCompleterRegistered = $true
+        Register-ArgumentCompleter -CommandName nvmc -ParameterName Filter -ScriptBlock {
+            param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+            Get-NvmcVersions | ForEach-Object { $_.Name } | Sort-Object -Unique | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+                [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+            }
+        }
+    }
+
     $nvmCmd = Get-Command nvm -ErrorAction SilentlyContinue
     if (-not $nvmCmd) {
         Write-Error 'nvm not found.'
@@ -190,11 +200,4 @@ function nvmc {
         }
 
     if ($picked) { Invoke-NvmcSelect $picked }
-}
-
-Register-ArgumentCompleter -CommandName nvmc -ParameterName Filter -ScriptBlock {
-    param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-    Get-NvmcVersions | ForEach-Object { $_.Name } | Sort-Object -Unique | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
-        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
-    }
 }
