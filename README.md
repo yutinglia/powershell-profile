@@ -31,10 +31,26 @@ If this folder is not already your profile directory, copy or symlink it there, 
 
 `setup.ps1` copies `profile.d/01-secrets.example.ps1` to `profile.d/01-secrets.ps1` when the latter is missing. Fill in your keys locally. That file is gitignored — do not commit real keys.
 
+## Machine-specific
+
+These assume this machine's layout. Change them before using the profile elsewhere.
+
+| Setting | Where | Default / assumption | Used by |
+| --- | --- | --- | --- |
+| `WORK_ROOT` | `profile.d/00-env.ps1` | `D:/work` | `work` (cd), `proj` (scan git repos under this tree, depth 3) |
+| Conda hook | `profile.ps1` (AllHosts) | `%USERPROFILE%\miniconda3\Scripts\conda.exe` | `condac`; skip the block if conda lives somewhere else. `conda init powershell` may rewrite this to an absolute path. |
+| WezTerm config | `profile.d/30-aliases.ps1` | `%USERPROFILE%\.config\wezterm` | `wezconf` |
+| SSH config | `~/.ssh/config` | OpenSSH user config | `sshc`, `sshls`, `sshconf` |
+| WSL config | `%USERPROFILE%\.wslconfig` | Windows WSL2 config | `wslconf` |
+| nvm-windows | `NVM_HOME` / `NVM_SYMLINK` | Set by the nvm-windows installer | `nvmc` |
+
+`proj` and `work` do nothing useful until `WORK_ROOT` exists. `condac` needs the AllHosts conda hook loaded (`conda` as a function, not only `conda.exe`). `nvmc` and `wezconf` need the matching optional install (`.\setup.ps1 -Optional`).
+
 ## Commands
 
 | Command | What it does |
 | --- | --- |
+| `work` | `cd` to `WORK_ROOT` |
 | `sshc` | Pick an SSH host from `~/.ssh/config` and connect |
 | `proj` | Pick a git repo under `WORK_ROOT` and `cd` into it |
 | `condac` | Pick a conda env and activate it in this session |
