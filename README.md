@@ -40,13 +40,13 @@ These assume this machine's layout. Change them before using the profile elsewhe
 | Setting | Where | Default / assumption | Used by |
 | --- | --- | --- | --- |
 | `WORK_ROOT` | `profile.d/00-env.ps1` | `D:/work` | `work` (cd), `proj` (scan git repos under this tree, depth 3) |
-| Conda hook | `profile.ps1` (AllHosts) | `%USERPROFILE%\miniconda3\Scripts\conda.exe` | `condac`; skip the block if conda lives somewhere else. `conda init powershell` may rewrite this to an absolute path. |
+| Conda hook | `profile.ps1` (AllHosts) | `%USERPROFILE%\miniconda3\shell\condabin\Conda.psm1` | `condac`. Imports the module on first `conda`/`condac`; does **not** auto-activate `base`. `conda init powershell` may rewrite this to the slow generated hook. |
 | WezTerm config | `profile.d/30-aliases.ps1` | `%USERPROFILE%\.config\wezterm` | `wezconf` |
 | SSH config | `~/.ssh/config` | OpenSSH user config | `sshc`, `sshls`, `sshconf` |
 | WSL config | `%USERPROFILE%\.wslconfig` | Windows WSL2 config | `wslconf` |
 | nvm-windows | `NVM_HOME` / `NVM_SYMLINK` | Set by the nvm-windows installer | `nvmc` |
 
-`proj` and `work` do nothing useful until `WORK_ROOT` exists. `condac` needs the AllHosts conda hook loaded (`conda` as a function, not only `conda.exe`). `nvmc` and `wezconf` need the matching optional install (`.\setup.ps1 -Optional`).
+`proj` and `work` do nothing useful until `WORK_ROOT` exists. `condac` needs the AllHosts conda hook loaded (`conda` as a function, not only `conda.exe`). `nvmc` and `wezconf` need the matching optional install (`.\setup.ps1 -Optional`). Terminal-Icons loads on the first `Get-ChildItem` / `ls` / `dir`.
 
 ## Commands
 

@@ -20,26 +20,29 @@ Agent handoff for this PowerShell 7 profile. Not a generic plugin list — ideas
 
 ## Current profile (read this first)
 
-Thin loader: `Microsoft.PowerShell_profile.ps1` dots `profile.d/*.ps1` in filename order. Failures print and do not abort the rest.
+Thin loader: `Microsoft.PowerShell_profile.ps1` dots `profile.d/*.ps1` in filename order, skips non-interactive one-shots (`-Command` / `-File` / `-NonInteractive` without `-NoExit`) and `*.lazy.ps1`. Failures print and do not abort the rest.
 
 | Fragment | Role |
 | --- | --- |
 | `00-env.ps1` | `VIRTUAL_ENV_DISABLE_PROMPT`, `SSH_AUTH_SOCK`, `WORK_ROOT` |
+| `00-lazy.ps1` | `Import-ProfileLazy`; stubs for `*.lazy.ps1` until first use |
 | `00-tui.ps1` | `Invoke-ProfilePicker` native TUI (mouse, hover, details, numbered fallback) |
 | `01-secrets.ps1` | OpenRouter / Anthropic keys (gitignored; example is tracked) |
-| `10-prompt.ps1` | Terminal-Icons, posh-git, Oh My Posh → `themes/my-theme.omp.json` |
-| `20-readline.ps1` | MenuComplete, history prediction, up/down history search |
+| `10-prompt.ps1` | Oh My Posh (cached init) → `themes/my-theme.omp.json` |
+| `12-terminal-icons.lazy.ps1` | Terminal-Icons (first `Get-ChildItem` / `ls` / `dir`) |
+| `15-poshgit.lazy.ps1` | posh-git (first `git` Tab) |
+| `20-readline.ps1` | MenuComplete, cached predictor DLL, history ListView |
 | `30-aliases.ps1` | `open`, `work`, `conf`, `..` / `...`, `nx`, `pm`, `wezconf`, `ompconf`, `reload`, `touch`, `wslconf` |
 | `40-ssh.ps1` | `sshconf`, `sshls`, `sshc` (uses `Invoke-ProfilePicker`) |
 | `45-proj.ps1` | `proj` TUI — git repos under `WORK_ROOT` |
 | `46-conda.ps1` | `condac` TUI — conda env activate / deactivate |
 | `47-nvm.ps1` | `nvmc` TUI — nvm-windows version switch |
 | `50-tools.ps1` | `cleanport` (restart WinNAT) |
-| `60-gh-copilot.ps1` | `ghcs`, `ghce` |
-| `70-completions.ps1` | Chocolatey only |
+| `60-gh-copilot.lazy.ps1` | `ghcs`, `ghce` (first call) |
+| `70-completions.lazy.ps1` | Chocolatey (first `choco` Tab / `refreshenv`) |
 | `90-help.ps1` | `help` lists function names + files; `pshelp` → `Get-Help` |
 
-Also: `setup.ps1` + `winget/packages.json` (pwsh, Oh My Posh, Git, gh, VS Code, Terminal-Icons, posh-git, Meslo). AllHosts `profile.ps1` is conda-managed — do not fold it into CurrentUser fragments.
+Also: `setup.ps1` + `winget/packages.json` (pwsh, Oh My Posh, Git, gh, VS Code, Terminal-Icons, posh-git, Meslo). AllHosts `profile.ps1` stubs `conda` and imports Conda.psm1 on first use — do not fold it into CurrentUser fragments.
 
 Theme is two-line Dracula; keep the full prompt bar in history; clock is on the top-right of the path line. `sshc` already parses Host / HostName / User / Port / IdentityFile / ProxyJump / LocalForward and a leading `#` note.
 
@@ -112,7 +115,7 @@ Checkboxes are the source of truth. **Implement** lines are the agent prompt.
 - [x] **`psreadline`** · `20-readline.ps1` · S — Upgrade `profile.d/20-readline.ps1`: ListView predictions, no bell, Ctrl+Backspace, Dracula colors.
 - [ ] **`which`** · `which sshc` · S — Add a `which` helper that prints whether a name is an alias, function, or executable, and where it is defined.
 - [ ] **`profup`** · `profup` · S — Add `profup` to `git pull` the PowerShell profile repo and reload the current host profile.
-- [ ] **`lazy`** · `Microsoft.PowerShell_profile.ps1` · M — Speed up profile startup: skip non-interactive sessions and lazy-load Chocolatey, gh-copilot, and similar fragments.
+- [x] **`lazy`** · `Microsoft.PowerShell_profile.ps1` · M — Speed up profile startup: skip non-interactive sessions and lazy-load Chocolatey, gh-copilot, and similar fragments.
 
 ### Navigation
 
@@ -131,7 +134,7 @@ Prompt already shows git status; profile has almost no git verbs. Keep the alias
 
 ### Completions / secrets / homelab
 
-- [ ] **`complete`** · `70-completions.ps1` · S — Register tab completions for `gh`, `winget`, and ssh hosts in `profile.d/70-completions.ps1`.
+- [ ] **`complete`** · `70-completions.lazy.ps1` · S — Register tab completions for `gh`, `winget`, and ssh hosts in `profile.d/70-completions.lazy.ps1`.
 - [ ] **`secrets`** · `01-secrets.ps1` · M — Move OpenRouter/Anthropic secrets from plaintext `01-secrets.ps1` into Windows Credential Manager or SecretManagement.
 - [ ] **`lab`** · `lab` · M — Add a `lab` command that probes SSH hosts tagged as homelab (pve, opnsense, mac) and prints reachability.
 

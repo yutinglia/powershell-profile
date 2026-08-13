@@ -22,175 +22,86 @@ Set-PSReadLineOption -BellStyle None -Colors @{
 }
 
 try {
-    if (-not ('ProfileCommandPredictor' -as [type])) {
-        Add-Type -TypeDefinition @'
-using System;
-using System.Collections.Generic;
-using System.Management.Automation;
-using System.Management.Automation.Subsystem;
-using System.Management.Automation.Subsystem.Prediction;
-using System.Threading;
+    function Get-ProfilePredictorAssembly {
+        $csPath = Join-Path $PSScriptRoot 'ProfilePredictors.cs'
+        if (-not (Test-Path -LiteralPath $csPath)) { return }
+        if ('ProfileCommandPredictor' -as [type]) { return }
 
-public sealed class ProfileCommandPredictor : ICommandPredictor
-{
-    public static readonly Guid PredictorId = new Guid("3f8c1a72-9d4e-4b6a-a1c0-7e5d92f4b8e1");
-    private readonly string[] _names;
-    private readonly string[] _tips;
+        $cacheDir = Join-Path $env:LOCALAPPDATA 'pwsh-profile'
+        $dll = Join-Path $cacheDir 'ProfilePredictors.dll'
+        $keyPath = Join-Path $cacheDir 'ProfilePredictors.key'
+        $key = '{0}|{1}|{2}' -f
+            (Get-Item -LiteralPath $csPath).LastWriteTimeUtc.Ticks,
+            [psobject].Assembly.GetName().Version,
+            $PSVersionTable.PSVersion
 
-    public ProfileCommandPredictor(string[] names, string[] tips)
-    {
-        _names = names ?? Array.Empty<string>();
-        _tips = tips ?? Array.Empty<string>();
-    }
-
-    public Guid Id { get { return PredictorId; } }
-    public string Name { get { return "Profile"; } }
-    public string Description { get { return "Suggests commands from this PowerShell profile"; } }
-    public Dictionary<string, ScriptBlock> FunctionsToDefine { get { return null; } }
-
-    public SuggestionPackage GetSuggestion(PredictionClient client, PredictionContext context, CancellationToken cancellationToken)
-    {
-        string input = context.InputAst.Extent.Text;
-        if (string.IsNullOrWhiteSpace(input) || input.IndexOf(' ') >= 0)
-        {
-            return default(SuggestionPackage);
+        if ((Test-Path -LiteralPath $dll) -and (Test-Path -LiteralPath $keyPath) -and
+            ((Get-Content -LiteralPath $keyPath -Raw).Trim() -eq $key)) {
+            try {
+                Add-Type -Path $dll
+                return
+            }
+            catch {
+            }
         }
 
-        var results = new List<PredictiveSuggestion>();
-        for (int i = 0; i < _names.Length; i++)
-        {
-            string name = _names[i];
-            if (name.Length > input.Length &&
-                name.StartsWith(input, StringComparison.OrdinalIgnoreCase))
-            {
-                string tip = (i < _tips.Length) ? _tips[i] : null;
-                if (string.IsNullOrEmpty(tip))
-                {
-                    results.Add(new PredictiveSuggestion(name));
+        $compiled = $false
+        $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
+        $csc = $null
+        $refDir = $null
+        if ($dotnet) {
+            foreach ($line in @(& $dotnet.Source --list-sdks 2>$null)) {
+                if ($line -match '^(?<ver>\d+\.\d+\.\d+)\s+\[(?<root>.+)\]$') {
+                    $candidate = Join-Path $Matches.root $Matches.ver 'Roslyn\bincore\csc.dll'
+                    if (Test-Path -LiteralPath $candidate) { $csc = $candidate }
                 }
-                else
-                {
-                    results.Add(new PredictiveSuggestion(name, tip));
+            }
+            $major = [Environment]::Version.Major
+            $packRoot = Join-Path ${env:ProgramFiles} 'dotnet\packs\Microsoft.NETCore.App.Ref'
+            if (Test-Path -LiteralPath $packRoot) {
+                $pack = Get-ChildItem -LiteralPath $packRoot -Directory |
+                    Where-Object { $_.Name.StartsWith("$major.") } |
+                    Sort-Object Name |
+                    Select-Object -Last 1
+                if ($pack) {
+                    $candidate = Join-Path $pack.FullName "ref\net$major.0"
+                    if (Test-Path -LiteralPath $candidate) { $refDir = $candidate }
                 }
             }
         }
 
-        return results.Count == 0 ? default(SuggestionPackage) : new SuggestionPackage(results);
-    }
-
-    public bool CanAcceptFeedback(PredictionClient client, PredictorFeedbackKind feedback)
-    {
-        return false;
-    }
-
-    public void OnSuggestionDisplayed(PredictionClient client, uint session, int countOrIndex) { }
-    public void OnSuggestionAccepted(PredictionClient client, uint session, string acceptedSuggestion) { }
-    public void OnCommandLineAccepted(PredictionClient client, IReadOnlyList<string> history) { }
-    public void OnCommandLineExecuted(PredictionClient client, string commandLine, bool success) { }
-}
-'@
-    }
-
-    if (-not ('ProfileHistoryPredictor' -as [type])) {
-        Add-Type -TypeDefinition @'
-using System;
-using System.Collections.Generic;
-using System.Management.Automation;
-using System.Management.Automation.Subsystem;
-using System.Management.Automation.Subsystem.Prediction;
-using System.Threading;
-
-public sealed class ProfileHistoryPredictor : ICommandPredictor
-{
-    public static readonly Guid PredictorId = new Guid("8b2e9f14-6c47-4a1d-b3e8-5d70c91a4f26");
-    private readonly HashSet<string> _profileNames;
-    private readonly object _gate = new object();
-    private string[] _history;
-
-    public ProfileHistoryPredictor(string[] profileNames, string[] history)
-    {
-        _profileNames = new HashSet<string>(
-            profileNames ?? Array.Empty<string>(),
-            StringComparer.OrdinalIgnoreCase);
-        _history = history ?? Array.Empty<string>();
-    }
-
-    public Guid Id { get { return PredictorId; } }
-    public string Name { get { return "History"; } }
-    public string Description { get { return "Suggests PSReadLine history except bare profile commands"; } }
-    public Dictionary<string, ScriptBlock> FunctionsToDefine { get { return null; } }
-
-    public SuggestionPackage GetSuggestion(PredictionClient client, PredictionContext context, CancellationToken cancellationToken)
-    {
-        string input = context.InputAst.Extent.Text;
-        if (string.IsNullOrWhiteSpace(input))
-        {
-            return default(SuggestionPackage);
-        }
-
-        string[] hist;
-        lock (_gate)
-        {
-            hist = _history;
-        }
-
-        var results = new List<PredictiveSuggestion>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        for (int i = hist.Length - 1; i >= 0; i--)
-        {
-            string line = hist[i];
-            if (string.IsNullOrEmpty(line) || line.Length < input.Length)
-            {
-                continue;
+        if ($dotnet -and $csc -and $refDir) {
+            New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+            $sma = [psobject].Assembly.Location
+            $refs = @(
+                (Join-Path $refDir 'System.Runtime.dll')
+                (Join-Path $refDir 'System.Collections.dll')
+                (Join-Path $refDir 'System.Threading.dll')
+                (Join-Path $refDir 'netstandard.dll')
+                $sma
+            )
+            $rargs = foreach ($r in $refs) { '/r:"{0}"' -f $r }
+            $prevOut = $env:DOTNET_CLI_TELEMETRY_OPTOUT
+            $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
+            try {
+                & $dotnet.Source exec $csc /noconfig /nostdlib /nologo /t:library ("/out:{0}" -f $dll) @rargs $csPath 2>$null
+                if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $dll) -and ((Get-Item -LiteralPath $dll).Length -gt 0)) {
+                    Set-Content -LiteralPath $keyPath -Value $key -NoNewline
+                    Add-Type -Path $dll
+                    $compiled = $true
+                }
             }
-            if (_profileNames.Contains(line))
-            {
-                continue;
-            }
-            if (line.IndexOf(input, StringComparison.OrdinalIgnoreCase) < 0)
-            {
-                continue;
-            }
-            if (!seen.Add(line))
-            {
-                continue;
-            }
-
-            results.Add(new PredictiveSuggestion(line));
-            if (results.Count >= 20)
-            {
-                break;
+            finally {
+                $env:DOTNET_CLI_TELEMETRY_OPTOUT = $prevOut
             }
         }
 
-        return results.Count == 0 ? default(SuggestionPackage) : new SuggestionPackage(results);
-    }
-
-    public bool CanAcceptFeedback(PredictionClient client, PredictorFeedbackKind feedback)
-    {
-        return feedback == PredictorFeedbackKind.CommandLineAccepted;
-    }
-
-    public void OnSuggestionDisplayed(PredictionClient client, uint session, int countOrIndex) { }
-    public void OnSuggestionAccepted(PredictionClient client, uint session, string acceptedSuggestion) { }
-
-    public void OnCommandLineAccepted(PredictionClient client, IReadOnlyList<string> history)
-    {
-        var arr = new string[history.Count];
-        for (int i = 0; i < history.Count; i++)
-        {
-            arr[i] = history[i];
-        }
-        lock (_gate)
-        {
-            _history = arr;
+        if (-not $compiled) {
+            Add-Type -TypeDefinition (Get-Content -LiteralPath $csPath -Raw)
         }
     }
 
-    public void OnCommandLineExecuted(PredictionClient client, string commandLine, bool success) { }
-}
-'@
-    }
+    Get-ProfilePredictorAssembly
 
     $profilePredictNames = [System.Collections.Generic.List[string]]::new()
     $profilePredictTips = [System.Collections.Generic.List[string]]::new()
@@ -202,64 +113,93 @@ public sealed class ProfileHistoryPredictor : ICommandPredictor
         $profilePredictFiles += Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.ps1' -File
     }
 
-    foreach ($profilePredictFile in $profilePredictFiles) {
-        $profilePredictLines = Get-Content -LiteralPath $profilePredictFile.FullName
-        for ($i = 0; $i -lt $profilePredictLines.Count; $i++) {
-            if ($profilePredictLines[$i] -notmatch '^function\s+([a-zA-Z0-9_.-]+)') {
-                continue
+    $profilePredictCacheDir = Join-Path $env:LOCALAPPDATA 'pwsh-profile'
+    $profilePredictNameCache = Join-Path $profilePredictCacheDir 'predict-names.json'
+    $profilePredictStamp = ($profilePredictFiles | Measure-Object -Property LastWriteTimeUtc -Maximum).Maximum.Ticks
+    $profilePredictCached = $false
+    if ($profilePredictStamp -and (Test-Path -LiteralPath $profilePredictNameCache)) {
+        try {
+            $profilePredictJson = Get-Content -LiteralPath $profilePredictNameCache -Raw | ConvertFrom-Json
+            if ($profilePredictJson.ticks -eq $profilePredictStamp) {
+                foreach ($n in @($profilePredictJson.names)) { $profilePredictNames.Add([string]$n) }
+                foreach ($t in @($profilePredictJson.tips)) { $profilePredictTips.Add([string]$t) }
+                $profilePredictCached = $true
             }
+        }
+        catch {
+        }
+    }
 
-            $profilePredictName = $Matches[1]
-            if ($profilePredictName -match '^(Get|Invoke)-') {
-                continue
-            }
-
-            $profilePredictTip = ''
-            for ($j = $i + 1; $j -lt $profilePredictLines.Count; $j++) {
-                $trim = $profilePredictLines[$j].Trim()
-                if ($trim -eq '') {
+    if (-not $profilePredictCached) {
+        foreach ($profilePredictFile in $profilePredictFiles) {
+            $profilePredictLines = Get-Content -LiteralPath $profilePredictFile.FullName
+            for ($i = 0; $i -lt $profilePredictLines.Count; $i++) {
+                if ($profilePredictLines[$i] -notmatch '^function\s+([a-zA-Z0-9_.-]+)') {
                     continue
                 }
-                if ($trim -eq '{') {
+
+                $profilePredictName = $Matches[1]
+                if ($profilePredictName -match '^(Get|Invoke)-') {
                     continue
                 }
-                if ($trim -eq '<#' -or $trim.StartsWith('<#')) {
-                    $inSynopsis = $false
-                    $start = if ($trim -eq '<#') { $j + 1 } else { $j }
-                    for ($k = $start; $k -lt $profilePredictLines.Count; $k++) {
-                        $helpLine = $profilePredictLines[$k].Trim()
-                        if ($helpLine -eq '#>' -or $helpLine.EndsWith('#>')) {
-                            break
-                        }
-                        if ($helpLine -eq '.SYNOPSIS') {
-                            $inSynopsis = $true
-                            continue
-                        }
-                        if ($inSynopsis) {
-                            if ($helpLine.StartsWith('.')) {
+
+                $profilePredictTip = ''
+                for ($j = $i + 1; $j -lt $profilePredictLines.Count; $j++) {
+                    $trim = $profilePredictLines[$j].Trim()
+                    if ($trim -eq '') {
+                        continue
+                    }
+                    if ($trim -eq '{') {
+                        continue
+                    }
+                    if ($trim -eq '<#' -or $trim.StartsWith('<#')) {
+                        $inSynopsis = $false
+                        $start = if ($trim -eq '<#') { $j + 1 } else { $j }
+                        for ($k = $start; $k -lt $profilePredictLines.Count; $k++) {
+                            $helpLine = $profilePredictLines[$k].Trim()
+                            if ($helpLine -eq '#>' -or $helpLine.EndsWith('#>')) {
                                 break
                             }
-                            if ($helpLine) {
-                                $profilePredictTip = $helpLine
-                                break
+                            if ($helpLine -eq '.SYNOPSIS') {
+                                $inSynopsis = $true
+                                continue
+                            }
+                            if ($inSynopsis) {
+                                if ($helpLine.StartsWith('.')) {
+                                    break
+                                }
+                                if ($helpLine) {
+                                    $profilePredictTip = $helpLine
+                                    break
+                                }
                             }
                         }
                     }
+                    break
                 }
-                break
-            }
 
-            $profilePredictNames.Add($profilePredictName)
-            $profilePredictTips.Add($profilePredictTip)
+                $profilePredictNames.Add($profilePredictName)
+                $profilePredictTips.Add($profilePredictTip)
+            }
+        }
+
+        try {
+            New-Item -ItemType Directory -Path $profilePredictCacheDir -Force | Out-Null
+            [pscustomobject]@{
+                ticks = $profilePredictStamp
+                names = [string[]]$profilePredictNames
+                tips  = [string[]]$profilePredictTips
+            } | ConvertTo-Json -Compress | Set-Content -LiteralPath $profilePredictNameCache -Encoding utf8
+        }
+        catch {
         }
     }
 
     $profilePredictHistory = [System.Collections.Generic.List[string]]::new()
     try {
-        foreach ($item in [Microsoft.PowerShell.PSConsoleReadLine]::GetHistoryItems()) {
-            if ($item.CommandLine) {
-                $profilePredictHistory.Add($item.CommandLine)
-            }
+        $profilePredictHistoryPath = (Get-PSReadLineOption).HistorySavePath
+        if ($profilePredictHistoryPath -and (Test-Path -LiteralPath $profilePredictHistoryPath)) {
+            $profilePredictHistory.AddRange([string[]][System.IO.File]::ReadAllLines($profilePredictHistoryPath))
         }
     }
     catch {
@@ -286,7 +226,7 @@ public sealed class ProfileHistoryPredictor : ICommandPredictor
 catch {
 }
 
-Remove-Variable -Name profilePredictNames, profilePredictTips, profilePredictFiles, profilePredictFile, profilePredictLines, profilePredictName, profilePredictTip, profilePredictHistory, subsystemKind, predictorId, item -ErrorAction SilentlyContinue
+Remove-Variable -Name profilePredictNames, profilePredictTips, profilePredictFiles, profilePredictFile, profilePredictLines, profilePredictName, profilePredictTip, profilePredictHistory, profilePredictHistoryPath, profilePredictCacheDir, profilePredictNameCache, profilePredictStamp, profilePredictCached, profilePredictJson, subsystemKind, predictorId -ErrorAction SilentlyContinue
 
 try {
     Set-PSReadLineOption -PredictionSource Plugin -PredictionViewStyle ListView -ErrorAction Stop
