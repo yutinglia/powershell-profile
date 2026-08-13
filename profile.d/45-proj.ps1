@@ -1,4 +1,8 @@
 function Get-ProjRepos {
+    <#
+    .SYNOPSIS
+        Internal helper for proj.
+    #>
     function Resolve-ProjPath {
         param([string]$Base, [string]$Path)
         $Path = $Path.Trim()

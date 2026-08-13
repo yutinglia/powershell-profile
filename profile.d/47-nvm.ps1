@@ -1,4 +1,8 @@
 function Get-NvmcVersions {
+    <#
+    .SYNOPSIS
+        Internal helper for nvmc.
+    #>
     function Get-NvmcHome {
         if ($env:NVM_HOME -and (Test-Path -LiteralPath $env:NVM_HOME -PathType Container)) {
             return $env:NVM_HOME

@@ -1,9 +1,17 @@
 function cleanport {
+    <#
+    .SYNOPSIS
+        Restart the WinNAT service.
+    #>
     net stop winnat
     net start winnat
 }
 
 function claude_remote {
+    <#
+    .SYNOPSIS
+        Run the PVE Claude remote helper for a local folder.
+    #>
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Specifies the folder path to pass to the script.")]

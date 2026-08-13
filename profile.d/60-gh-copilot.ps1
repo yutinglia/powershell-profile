@@ -1,4 +1,8 @@
 function ghcs {
+	<#
+	.SYNOPSIS
+		Ask GitHub Copilot to suggest a command.
+	#>
 	# Debug support provided by common PowerShell function parameters, which is natively aliased as -d or -db
 	# https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_commonparameters?view=powershell-7.4#-debug
 	param(
@@ -63,6 +67,10 @@ function ghcs {
 }
 
 function ghce {
+	<#
+	.SYNOPSIS
+		Ask GitHub Copilot to explain a command.
+	#>
 	# Debug support provided by common PowerShell function parameters, which is natively aliased as -d or -db
 	# https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_commonparameters?view=powershell-7.4#-debug
 	param(

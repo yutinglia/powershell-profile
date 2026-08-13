@@ -1,4 +1,8 @@
 function Get-CondacEnvs {
+    <#
+    .SYNOPSIS
+        Internal helper for condac.
+    #>
     function Get-CondacCondaExe {
         foreach ($candidate in @(
             $env:CONDA_EXE

@@ -1,12 +1,24 @@
 function sshconf {
+    <#
+    .SYNOPSIS
+        Open ~/.ssh/config in VS Code.
+    #>
     code $env:USERPROFILE\.ssh\config
 }
 
 function sshls {
+    <#
+    .SYNOPSIS
+        List Host entries from ~/.ssh/config.
+    #>
     Get-Content "$env:USERPROFILE\.ssh\config" | Select-String "^Host\s+([^*]+)$" | ForEach-Object { $_.Matches.Groups[1].Value.Trim() }
 }
 
 function sshc {
+    <#
+    .SYNOPSIS
+        Pick an SSH host from ~/.ssh/config and connect.
+    #>
     [CmdletBinding()]
     param (
         [string]$Filter

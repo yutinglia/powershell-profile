@@ -106,10 +106,10 @@ Checkboxes are the source of truth. **Implement** lines are the agent prompt.
 
 - [ ] **`killport`** · `killport 3000` · S — Add `killport <port>` that finds the listening process and stops it, plus tab completion for listening ports.
 - [ ] **`ports`** · `ports` · S — Add a `ports` command that lists listening TCP ports with PID and process name.
-- [ ] **`touch-fix`** · `touch file` · S — Fix the `touch` function so it accepts paths, creates files, and updates timestamps if they exist.
-- [ ] **`help-desc`** · `help` · S — Extend the profile `help` command to show a one-line description per function from comment-based help.
+- [x] **`touch-fix`** · `touch file` · S — Fix the `touch` function so it accepts paths, creates files, and updates timestamps if they exist.
+- [x] **`help-desc`** · `help` · S — Extend the profile `help` command to show a one-line description per function from comment-based help.
 - [ ] **`reload-safe`** · `reload` · S — Make `reload` safe to run repeatedly without stacking argument completers or duplicate functions.
-- [ ] **`psreadline`** · `20-readline.ps1` · S — Upgrade `profile.d/20-readline.ps1`: ListView predictions, no bell, Ctrl+Backspace, Dracula colors.
+- [x] **`psreadline`** · `20-readline.ps1` · S — Upgrade `profile.d/20-readline.ps1`: ListView predictions, no bell, Ctrl+Backspace, Dracula colors.
 - [ ] **`which`** · `which sshc` · S — Add a `which` helper that prints whether a name is an alias, function, or executable, and where it is defined.
 - [ ] **`profup`** · `profup` · S — Add `profup` to `git pull` the PowerShell profile repo and reload the current host profile.
 - [ ] **`lazy`** · `Microsoft.PowerShell_profile.ps1` · M — Speed up profile startup: skip non-interactive sessions and lazy-load Chocolatey, gh-copilot, and similar fragments.
