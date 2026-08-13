@@ -46,7 +46,7 @@ These assume this machine's layout. Change them before using the profile elsewhe
 | WSL config | `%USERPROFILE%\.wslconfig` | Windows WSL2 config | `wslconf` |
 | nvm-windows | `NVM_HOME` / `NVM_SYMLINK` | Set by the nvm-windows installer | `nvmc` |
 
-`proj` and `work` do nothing useful until `WORK_ROOT` exists. `condac` needs the AllHosts conda hook loaded (`conda` as a function, not only `conda.exe`). `nvmc` and `wezconf` need the matching optional install (`.\setup.ps1 -Optional`). Terminal-Icons loads on the first `Get-ChildItem` / `ls` / `dir`.
+`proj` and `work` do nothing useful until `WORK_ROOT` exists. `condac` needs the AllHosts conda stub (`conda` as a function, not only `conda.exe`). `nvmc` and `wezconf` need the matching optional install (`.\setup.ps1 -Optional`).
 
 ## Commands
 
@@ -57,9 +57,23 @@ These assume this machine's layout. Change them before using the profile elsewhe
 | `proj` | Pick a git repo under `WORK_ROOT` and `cd` into it |
 | `condac` | Pick a conda env and activate it in this session |
 | `nvmc` | Pick an nvm-windows Node version and `nvm use` |
+| `ghcs` / `ghce` | GitHub Copilot suggest / explain (loads on first call) |
 | `help` | List profile functions with a one-line description |
 | `reload` | Dot-source the current host profile again |
 
 ## Layout
 
-`Microsoft.PowerShell_profile.ps1` dots `profile.d/*.ps1` in filename order (interactive sessions only; `*.lazy.ps1` loads on first use). `profile.ps1` is the AllHosts profile and is managed by conda — do not fold it into the CurrentUser fragments.
+`Microsoft.PowerShell_profile.ps1` is the CurrentUser CurrentHost loader. It dots `profile.d/*.ps1` in filename order, skips `*.example.ps1`, and **returns immediately** for non-interactive one-shots (`pwsh -Command` / `-File` / `-NonInteractive` without `-NoExit`). Failures print in red and do not abort the rest.
+
+`*.lazy.ps1` files are **not** dotted at startup. `profile.d/00-lazy.ps1` registers stubs; the fragment loads on first use:
+
+| First use | Loads |
+| --- | --- |
+| `ls` / `dir` / `Get-ChildItem` | Terminal-Icons |
+| `git` Tab | posh-git |
+| `ghcs` / `ghce` | GitHub Copilot helpers |
+| `choco` Tab / `refreshenv` | Chocolatey profile |
+
+`profile.ps1` is AllHosts. It only sets conda env vars and a `conda` stub; `Conda.psm1` imports on first `conda` / `condac`. It does **not** auto-activate `base`. Do not fold AllHosts into CurrentUser fragments. `conda init powershell` may rewrite this file to the slow generated hook — restore the stub if startup jumps back to seconds.
+
+Oh My Posh init and the PSReadLine predictor assembly cache under `%LOCALAPPDATA%\pwsh-profile`. Delete that folder to force a rebuild.
