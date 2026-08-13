@@ -2,6 +2,8 @@
 
 PowerShell 7 profile with native TUI pickers (`sshc`, `proj`, `condac`, `nvmc`) and `setup.ps1` for the tools it needs.
 
+This is a **personal** profile, published as-is for fun. It is not a product, not supported, and not guaranteed to work on any other machine. Steal ideas if you like; expect to edit paths and skip bits that do not apply to you.
+
 ## Requirements
 
 - [PowerShell 7](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows)
