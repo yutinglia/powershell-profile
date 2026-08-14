@@ -65,7 +65,7 @@ These assume this machine's layout. Change them before using the profile elsewhe
 
 ## Layout
 
-`Microsoft.PowerShell_profile.ps1` is the CurrentUser CurrentHost loader. It dots `profile.d/*.ps1` in filename order, skips `*.example.ps1`, and **returns immediately** for non-interactive one-shots (`pwsh -Command` / `-File` / `-NonInteractive` without `-NoExit`). Failures print in red and do not abort the rest.
+`Microsoft.PowerShell_profile.ps1` is the CurrentUser CurrentHost loader. Its startup path uses .NET file enumeration, dots `profile.d/*.ps1` in filename order, skips `*.lazy.ps1` and `*.example.ps1`, and **returns immediately** for non-interactive one-shots (`pwsh -Command` / `-File` / `-NonInteractive` without `-NoExit`). Fragment failures print in red and do not abort the rest.
 
 `*.lazy.ps1` files are **not** dotted at startup. `profile.d/00-lazy.ps1` registers stubs; the fragment loads on first use:
 
@@ -78,4 +78,18 @@ These assume this machine's layout. Change them before using the profile elsewhe
 
 `profile.ps1` is AllHosts. It only sets conda env vars and a `conda` stub; `Conda.psm1` imports on first `conda` / `condac`. It does **not** auto-activate `base`. Do not fold AllHosts into CurrentUser fragments. `conda init powershell` may rewrite this file to the slow generated hook — restore the stub if startup jumps back to seconds.
 
-Oh My Posh init and the PSReadLine predictor assembly cache under `%LOCALAPPDATA%\pwsh-profile`. Delete that folder to force a rebuild.
+`profile.d/10-prompt.ps1` installs a two-line Dracula fallback immediately, then schedules the official `oh-my-posh init` on a profile-owned, one-shot `PowerShell.OnIdle` subscription. The theme's top-level `async` setting makes the generated wrapper retain that fallback; after the idle handoff, the wrapper loads the full cached prompt on its first render. Running the official init once per shell also gives every session its own `POSH_SESSION_ID`. If Oh My Posh or the theme is missing, the fallback remains active and the profile prints a warning.
+
+PSReadLine key bindings, colors, and basic options are applied synchronously. `profile.d/20-readline.ps1` defers the custom predictor assembly, command index, history read, and subsystem registration to one profile-owned `PowerShell.OnIdle` subscription. Initialization is once per session and idempotent; `reload` replaces only a pending profile subscription and leaves unrelated `PowerShell.OnIdle` subscribers alone.
+
+Oh My Posh now manages its generated init cache in its own application cache directory. `%LOCALAPPDATA%\pwsh-profile` is used only for the predictor DLL/key and command-name cache. A legacy `%LOCALAPPDATA%\pwsh-profile\omp-init.ps1` may remain, but this profile no longer reads or writes it.
+
+## Startup benchmark
+
+Run the benchmark from a warm, otherwise idle system:
+
+```powershell
+pwsh -NoProfile -File .\scripts\Measure-ProfileStartup.ps1 -WarmupCount 2 -SampleCount 15
+```
+
+The script times the same interactive startup arguments with and without the profile: `pwsh -NoLogo -NoProfile -NoExit -Command exit` and `pwsh -NoLogo -NoExit -Command exit`. It reports median, mean, nearest-rank p95, minimum, maximum, and the profile increment (`WithProfile - NoProfile`). It does not clear Oh My Posh, predictor, filesystem, or runtime caches.

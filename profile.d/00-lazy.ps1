@@ -17,15 +17,24 @@ function Import-ProfileLazy {
 
     if ($script:ProfileLazyLoaded[$Name]) { return }
 
-    $path = Join-Path $script:ProfileFragmentDir $Name
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+    $path = [System.IO.Path]::Combine($script:ProfileFragmentDir, $Name)
+    if (-not [System.IO.File]::Exists($path)) {
         Write-Host "Failed to load profile fragment '$Name': file not found" -ForegroundColor Red
         return
     }
 
     foreach ($entry in @($script:ProfileLazyFunctions.GetEnumerator())) {
         if ($entry.Value -eq $Name) {
-            Remove-Item -Path "Function:\$($entry.Key)" -Force -ErrorAction SilentlyContinue
+            try {
+                $ExecutionContext.SessionState.InvokeProvider.Item.Remove(
+                    [string[]]@("Function:\$($entry.Key)"),
+                    $false,
+                    $true,
+                    $false
+                )
+            }
+            catch {
+            }
         }
     }
 
@@ -35,7 +44,10 @@ function Import-ProfileLazy {
             if ($entry.Value -ne $Name) { continue }
             $local = Get-Command -Name $entry.Key -CommandType Function -ErrorAction SilentlyContinue
             if ($local -and $local.ScriptBlock) {
-                Set-Item -Path "Function:global:$($entry.Key)" -Value $local.ScriptBlock
+                $null = $ExecutionContext.SessionState.InvokeProvider.Item.Set(
+                    "Function:\global:$($entry.Key)",
+                    $local.ScriptBlock
+                )
             }
         }
         $script:ProfileLazyLoaded[$Name] = $true
@@ -61,10 +73,14 @@ function Register-ProfileLazyFunction {
 
     foreach ($name in $Command) {
         $script:ProfileLazyFunctions[$name] = $File
-        Set-Item -Path "Function:global:$name" -Value ([scriptblock]::Create(@"
+        $stub = [scriptblock]::Create(@"
             Import-ProfileLazy -Name '$File'
             & (Get-Command -Name '$name' -ErrorAction Stop) @args
-"@))
+"@)
+        $null = $ExecutionContext.SessionState.InvokeProvider.Item.Set(
+            "Function:\global:$name",
+            $stub
+        )
     }
 }
 
@@ -83,7 +99,7 @@ function Invoke-ProfileLazyNativeCompleter {
             $commandName = $commandAst.GetCommandName()
         }
         if (-not $commandName) { return }
-        $commandName = Split-Path -Leaf $commandName
+        $commandName = [System.IO.Path]::GetFileName($commandName)
         if ($commandName.EndsWith('.exe', [StringComparison]::OrdinalIgnoreCase)) {
             $commandName = $commandName.Substring(0, $commandName.Length - 4)
         }

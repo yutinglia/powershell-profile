@@ -22,6 +22,12 @@ Set-PSReadLineOption -BellStyle None -Colors @{
 }
 
 try {
+    Set-PSReadLineOption -PredictionSource Plugin -PredictionViewStyle ListView -ErrorAction Stop
+}
+catch {
+}
+
+function Invoke-ProfilePredictorInitializationCore {
     function Get-ProfilePredictorAssembly {
         $csPath = Join-Path $PSScriptRoot 'ProfilePredictors.cs'
         if (-not (Test-Path -LiteralPath $csPath)) { return }
@@ -227,14 +233,128 @@ try {
         $subsystemKind,
         [ProfileHistoryPredictor]::new([string[]]$profilePredictNames, [string[]]$profilePredictHistory)
     )
-}
-catch {
+
+    try {
+        Set-PSReadLineOption -PredictionSource Plugin -PredictionViewStyle ListView -ErrorAction Stop
+    }
+    catch {
+    }
+
+    Remove-Variable -Name profilePredictNames, profilePredictTips, profilePredictFiles, profilePredictFile, profilePredictLines, profilePredictName, profilePredictTip, profilePredictHistory, profilePredictHistoryPath, profilePredictCacheDir, profilePredictNameCache, profilePredictStamp, profilePredictCached, profilePredictJson, subsystemKind, predictorId, predictorInfo, predictorRegistered, impl -ErrorAction SilentlyContinue
 }
 
-Remove-Variable -Name profilePredictNames, profilePredictTips, profilePredictFiles, profilePredictFile, profilePredictLines, profilePredictName, profilePredictTip, profilePredictHistory, profilePredictHistoryPath, profilePredictCacheDir, profilePredictNameCache, profilePredictStamp, profilePredictCached, profilePredictJson, subsystemKind, predictorId, predictorInfo, predictorRegistered, impl -ErrorAction SilentlyContinue
+function Get-ProfilePredictorInitializationState {
+    $state = Get-Variable -Name '__ProfileReadLinePredictorState' -Scope Global -ValueOnly -ErrorAction SilentlyContinue
+    if ($null -eq $state -or $state.Owner -ne 'PowerShell.Profile.ReadLinePredictor/v1') {
+        $state = [pscustomobject]@{
+            Owner                = 'PowerShell.Profile.ReadLinePredictor/v1'
+            InitializationStatus = 'NotStarted'
+            IdleSubscriptionId   = $null
+            IdleJobId            = $null
+        }
+        Set-Variable -Name '__ProfileReadLinePredictorState' -Scope Global -Value $state
+    }
 
-try {
-    Set-PSReadLineOption -PredictionSource Plugin -PredictionViewStyle ListView -ErrorAction Stop
+    $state
 }
-catch {
+
+function Invoke-ProfilePredictorInitialization {
+    <#
+    .SYNOPSIS
+        Initialize the profile command and history predictors once per session.
+    #>
+    [CmdletBinding()]
+    param()
+
+    $state = Get-ProfilePredictorInitializationState
+    if ($state.InitializationStatus -in 'Initializing', 'Initialized') {
+        return
+    }
+
+    $state.InitializationStatus = 'Initializing'
+    try {
+        Invoke-ProfilePredictorInitializationCore
+        $state.InitializationStatus = 'Initialized'
+    }
+    catch {
+        $state.InitializationStatus = 'NotStarted'
+        throw
+    }
 }
+
+$profilePredictorState = Get-ProfilePredictorInitializationState
+$profilePredictorIdleSubscriber = $null
+if ($profilePredictorState.IdleSubscriptionId) {
+    $profilePredictorIdleSubscriber = Get-EventSubscriber -SubscriptionId $profilePredictorState.IdleSubscriptionId -ErrorAction SilentlyContinue
+    if (
+        $profilePredictorIdleSubscriber -and
+        $profilePredictorIdleSubscriber.SourceIdentifier -eq 'PowerShell.OnIdle' -and
+        $profilePredictorIdleSubscriber.Action -and
+        $profilePredictorIdleSubscriber.Action.Id -eq $profilePredictorState.IdleJobId
+    ) {
+        Unregister-Event -SubscriptionId $profilePredictorIdleSubscriber.SubscriptionId -ErrorAction SilentlyContinue
+    }
+}
+
+if ($profilePredictorState.IdleJobId) {
+    $profilePredictorIdleJob = Get-Job -Id $profilePredictorState.IdleJobId -ErrorAction SilentlyContinue
+    if ($profilePredictorIdleJob -and $profilePredictorIdleJob.Name -eq 'PowerShell.OnIdle') {
+        Remove-Job -Id $profilePredictorIdleJob.Id -Force -ErrorAction SilentlyContinue
+    }
+}
+
+$profilePredictorState.IdleSubscriptionId = $null
+$profilePredictorState.IdleJobId = $null
+
+if ($profilePredictorState.InitializationStatus -ne 'Initialized') {
+    $profilePredictorIdleJob = $null
+    try {
+        $profilePredictorIdleJob = Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -Action {
+            try {
+                Invoke-ProfilePredictorInitialization
+            }
+            catch {
+            }
+            finally {
+                if ($eventSubscriber) {
+                    Unregister-Event -SubscriptionId $eventSubscriber.SubscriptionId -ErrorAction SilentlyContinue
+                }
+            }
+        }
+
+        $profilePredictorIdleSubscriber = @(
+            Get-EventSubscriber -SourceIdentifier PowerShell.OnIdle |
+                Where-Object {
+                    $_.Action -and $_.Action.Id -eq $profilePredictorIdleJob.Id
+                }
+        )[0]
+        if (-not $profilePredictorIdleSubscriber) {
+            throw 'Unable to identify the profile predictor OnIdle subscription.'
+        }
+
+        $profilePredictorState.IdleSubscriptionId = $profilePredictorIdleSubscriber.SubscriptionId
+        $profilePredictorState.IdleJobId = $profilePredictorIdleJob.Id
+    }
+    catch {
+        if ($profilePredictorIdleJob) {
+            Get-EventSubscriber -SourceIdentifier PowerShell.OnIdle |
+                Where-Object {
+                    $_.Action -and $_.Action.Id -eq $profilePredictorIdleJob.Id
+                } |
+                ForEach-Object {
+                    Unregister-Event -SubscriptionId $_.SubscriptionId -ErrorAction SilentlyContinue
+                }
+            Remove-Job -Id $profilePredictorIdleJob.Id -Force -ErrorAction SilentlyContinue
+        }
+
+        $profilePredictorState.IdleSubscriptionId = $null
+        $profilePredictorState.IdleJobId = $null
+        try {
+            Invoke-ProfilePredictorInitialization
+        }
+        catch {
+        }
+    }
+}
+
+Remove-Variable -Name profilePredictorState, profilePredictorIdleSubscriber, profilePredictorIdleJob -ErrorAction SilentlyContinue
