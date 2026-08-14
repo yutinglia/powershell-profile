@@ -8,6 +8,12 @@ function global:prompt {
     "`e[38;2;189;147;249m$location`e[0m`n`e[38;2;${promptColor}m❯`e[0m "
 }
 
+try {
+    Set-PSReadLineOption -ExtraPromptLineCount 1
+}
+catch {
+}
+
 $profileOmpTheme = [System.IO.Path]::Combine(
     [System.IO.Directory]::GetParent($PSScriptRoot).FullName,
     'themes\my-theme.omp.json'
@@ -85,6 +91,11 @@ else {
                         $generatedPrompt.ScriptBlock
                     )
                     $state.Status = 'Initialized'
+                    try {
+                        [Microsoft.PowerShell.PSConsoleReadLine]::InvokePrompt()
+                    }
+                    catch {
+                    }
                 }
                 catch {
                     $state.Status = 'Failed'
