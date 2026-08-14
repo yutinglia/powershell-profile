@@ -1,6 +1,6 @@
 # powershell-profile
 
-PowerShell 7 profile with native TUI pickers (`sshc`, `proj`, `condac`, `nvmc`) and `setup.ps1` for the tools it needs.
+PowerShell 7 profile with native TUI pickers (`sshc`, `proj`, `condac`, `nvmc`, `gitc`) and `setup.ps1` for the tools it needs.
 
 This is a **personal** profile, published as-is for fun. It is not a product, not supported, and not guaranteed to work on any other machine. Steal ideas if you like; expect to edit paths and skip bits that do not apply to you.
 
@@ -57,6 +57,8 @@ These assume this machine's layout. Change them before using the profile elsewhe
 | `proj` | Pick a git repo under `WORK_ROOT` and `cd` into it |
 | `condac` | Pick a conda env and activate it in this session |
 | `nvmc` | Pick an nvm-windows Node version and `nvm use` |
+| `gitc` | Pick a local or remote git branch and check it out |
+| `repo` | `cd` to the current git worktree root |
 | `ghcs` / `ghce` | GitHub Copilot suggest / explain (loads on first call) |
 | `help` | List profile functions with a one-line description |
 | `reload` | Dot-source the current host profile again |

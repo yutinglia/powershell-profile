@@ -37,6 +37,7 @@ Thin loader: `Microsoft.PowerShell_profile.ps1` dots `profile.d/*.ps1` in filena
 | `45-proj.ps1` | `proj` TUI — git repos under `WORK_ROOT` |
 | `46-conda.ps1` | `condac` TUI — conda env activate / deactivate |
 | `47-nvm.ps1` | `nvmc` TUI — nvm-windows version switch |
+| `48-git.ps1` | `gitc` TUI (branch checkout), `repo` (cd worktree root) |
 | `50-tools.ps1` | `cleanport` (restart WinNAT) |
 | `60-gh-copilot.lazy.ps1` | `ghcs`, `ghce` (first call) |
 | `70-completions.lazy.ps1` | Chocolatey (first `choco` Tab / `refreshenv`) |
@@ -128,8 +129,8 @@ Checkboxes are the source of truth. **Implement** lines are the agent prompt.
 
 Prompt already shows git status; profile has almost no git verbs. Keep the alias set small.
 
-- [ ] **`gitc`** · `gitc` · M — Add a `gitc` TUI to pick and checkout local/remote branches, showing dirty status in the details pane.
-- [ ] **`repo`** · `repo` · S — Add a `repo` function that cds to the current git worktree root.
+- [x] **`gitc`** · `gitc` · M — Add a `gitc` TUI to pick and checkout local/remote branches, showing dirty status in the details pane.
+- [x] **`repo`** · `repo` · S — Add a `repo` function that cds to the current git worktree root.
 - [ ] **`gst`** · `gst` / `gco` / `gpr` · S — Add a small git alias set: `gst`, `gco`, `glog`, and `gpr` wrapping `gh pr view --web`.
 
 ### Completions / secrets / homelab
