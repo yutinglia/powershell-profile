@@ -78,6 +78,28 @@ public static class ProfileTuiNativeConsole {
         $k = [Console]::ReadKey($true)
         $ctrl = [ConsoleModifiers]::Control
 
+        # Dedicated keys that VT_INPUT often delivers as C0 bytes rather than ConsoleKey.
+        # Must run before mapping 1–26 onto Ctrl+A…Z (CR=Ctrl+M, LF=Ctrl+J, BS=Ctrl+H).
+        if (
+            $k.Key -eq [ConsoleKey]::Enter -or
+            $k.Key -eq [ConsoleKey]::LineFeed -or
+            $k.KeyChar -eq [char]13 -or
+            $k.KeyChar -eq [char]10
+        ) {
+            return @{ Type = 'enter' }
+        }
+
+        # VT_INPUT / Windows Terminal often delivers Backspace as DEL (0x7F) or BS (0x08)
+        # instead of ConsoleKey.Backspace; both are control chars and were previously ignored.
+        if (
+            $k.Key -eq [ConsoleKey]::Backspace -or
+            $k.Key -eq [ConsoleKey]::Delete -or
+            $k.KeyChar -eq [char]8 -or
+            $k.KeyChar -eq [char]127
+        ) {
+            return @{ Type = 'backspace' }
+        }
+
         # VT_INPUT often strips ConsoleModifiers and delivers C0 bytes (Ctrl+A = 1 … Ctrl+Z = 26).
         $ctrlChar = [int][char]$k.KeyChar
         $withCtrl = [bool]($k.Modifiers -band $ctrl)
@@ -92,19 +114,7 @@ public static class ProfileTuiNativeConsole {
         if ($ctrlLetter -eq 'C') { return @{ Type = 'cancel' } }
         if ($ctrlLetter -eq 'U') { return @{ Type = 'clear' } }
 
-        # VT_INPUT / Windows Terminal often delivers Backspace as DEL (0x7F) or BS (0x08)
-        # instead of ConsoleKey.Backspace; both are control chars and were previously ignored.
-        if (
-            $k.Key -eq [ConsoleKey]::Backspace -or
-            $k.Key -eq [ConsoleKey]::Delete -or
-            $k.KeyChar -eq [char]8 -or
-            $k.KeyChar -eq [char]127
-        ) {
-            return @{ Type = 'backspace' }
-        }
-
         switch ($k.Key) {
-            ([ConsoleKey]::Enter) { return @{ Type = 'enter' } }
             ([ConsoleKey]::UpArrow) { return @{ Type = 'up' } }
             ([ConsoleKey]::DownArrow) { return @{ Type = 'down' } }
             ([ConsoleKey]::PageUp) { return @{ Type = 'pageup' } }
